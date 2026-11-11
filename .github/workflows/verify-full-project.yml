@@ -22,6 +22,7 @@ jobs:
           test "$(find results/data_cleaning/removed_records -type f -name '*.csv' | wc -l)" -eq 11
       - name: Convert fresh CSVs to ROOT and check all stations
         run: |
+          git config --global --add safe.directory "$PWD"
           mv Climate_data_file.root /tmp/original-climate-data.root
           # The CI job already runs inside a ROOT container.
           sed -i 's|/projects/hep/fs11/share/mnxb11/bin/startmnxb11container.sh root|root -b|' scripts/csv_to_ttree/process_files.sh
