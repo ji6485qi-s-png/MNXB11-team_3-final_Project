@@ -1,0 +1,44 @@
+name: Verify teacher-facing project commands
+on: [push]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    container:
+      image: rootproject/root:6.34.00-ubuntu24.04
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run analysis with the bundled ROOT file
+        run: |
+          make && ./main
+          for file in daily_mean_over_years.pdf day_analysis.pdf annual_cold_days.pdf annual_cold_days.png; do
+            test -s "$file"
+            rm -- "$file"
+          done
+      - name: Rebuild the ROOT file from raw data
+        run: |
+          mv Climate_data_file.root /tmp/bundled-climate-data.root
+          if CLEAN_DATA_PATH=missing-input bash scripts/csv_to_ttree/process_files.sh > /tmp/missing-input.log 2>&1; then exit 1; fi
+          grep -q 'Cannot read cleaned station CSV' /tmp/missing-input.log
+          test ! -e Climate_data_file.root
+          tar -xzf datasets/datasets.tgz -C datasets
+          make smhi_cleaner
+          ./smhi_cleaner
+          test "$(find results/data_cleaning/dataset_clean -type f -name '*.csv' | wc -l)" -eq 11
+          test "$(find results/data_cleaning/removed_records -type f -name '*.csv' | wc -l)" -eq 11
+          CLEAN_DATA_PATH=results/data_cleaning/dataset_clean bash scripts/csv_to_ttree/process_files.sh 2>&1 | tee conversion.log
+          test -s Climate_data_file.root
+          if grep -Ei 'error:|exception|could not open|could not create' conversion.log; then exit 1; fi
+          grep -q 'Entries: 4252251' conversion.log
+      - name: Run the launcher scripts from a different directory
+        run: |
+          project="$PWD"
+          cd /tmp
+          bash "$project/scripts/buildproject.sh" && bash "$project/scripts/runproject.sh"
+          for file in daily_mean_over_years.pdf day_analysis.pdf annual_cold_days.pdf annual_cold_days.png; do
+            test -s "$project/$file"
+          done
