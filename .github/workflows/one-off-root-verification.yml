@@ -1,0 +1,27 @@
+name: One-off ROOT verification
+on: [push]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    container:
+      image: rootproject/root:6.34.00-ubuntu24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and run all three analyses
+        run: |
+          root-config --version
+          make -j2
+          ./main
+          test -s daily_mean_over_years.pdf
+          test -s day_analysis.pdf
+          test -s annual_cold_days.pdf
+          test -s annual_cold_days.png
+      - name: Build and run C++ data cleaning
+        run: |
+          tar -xzf datasets/datasets.tgz -C datasets
+          make smhi_cleaner
+          ./smhi_cleaner
+          test "$(find results/data_cleaning/dataset_clean -type f -name '*.csv' | wc -l)" -eq 11
+          test "$(find results/data_cleaning/removed_records -type f -name '*.csv' | wc -l)" -eq 11
